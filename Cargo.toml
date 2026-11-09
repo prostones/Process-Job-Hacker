@@ -1,0 +1,47 @@
+[package]
+name = "process-job-hacker"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+description = "Windows process tree CPU affinity and Job Object memory limiter"
+license = "MIT"
+authors = ["prostones"]
+repository = "https://github.com/prostones/win-job-limiter"
+
+[dependencies]
+anyhow = "1"
+chrono = "0.4"
+crossbeam-channel = "0.5"
+directories = "6"
+eframe = { version = "0.37", features = ["persistence"] }
+egui_extras = { version = "0.37", features = ["file", "svg_text"] }
+flexi_logger = "0.31"
+image = { version = "0.25", default-features = false, features = ["png"] }
+log = "0.4"
+muda = "0.21"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sysinfo = "0.40"
+thiserror = "2"
+tray-icon = "0.26"
+uuid = { version = "1", features = ["v4", "serde"] }
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_JobObjects",
+    "Win32_System_SystemInformation",
+    "Win32_System_Threading",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[build-dependencies]
+winres = "0.1"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+strip = "debuginfo"
+
+[profile.dev]
+opt-level = 1

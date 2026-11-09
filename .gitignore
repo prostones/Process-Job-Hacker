@@ -1,0 +1,7 @@
+target/
+screenshot*.png
+clippy.log
+*.log
+dist/
+installer/bin/
+installer/obj/
