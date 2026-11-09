@@ -1,0 +1,12 @@
+# Normalize line endings to LF in the repository, matching the original
+# development environment (Windows checkouts still get CRLF via core.autocrlf).
+* text=auto eol=lf
+
+# Binary assets must never be converted.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.exe binary
+*.dll binary
+*.pfx binary
