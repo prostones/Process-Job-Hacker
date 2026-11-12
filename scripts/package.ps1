@@ -106,9 +106,14 @@ function New-Stage {
 
     Copy-Item -LiteralPath $exePath -Destination (Join-Path $stageDir $exeName)
     Copy-Item -LiteralPath (Join-Path $repoRoot 'README.md') -Destination $stageDir
+    Copy-Item -LiteralPath (Join-Path $repoRoot 'README.zh-CN.md') -Destination $stageDir
     Copy-Item -LiteralPath (Join-Path $repoRoot 'LICENSE') -Destination $stageDir
     Copy-Item -LiteralPath (Join-Path $repoRoot 'CHANGELOG.md') -Destination $stageDir
-    Copy-Item -LiteralPath (Join-Path $repoRoot 'assets\main-window.png') -Destination $stageAssets
+    Copy-Item -LiteralPath (Join-Path $repoRoot 'assets\icon.png') -Destination $stageAssets
+    $screenshotsSrc = Join-Path $repoRoot 'assets\screenshots'
+    if (Test-Path -LiteralPath $screenshotsSrc) {
+        Copy-Item -LiteralPath $screenshotsSrc -Destination (Join-Path $stageAssets 'screenshots') -Recurse -Force
+    }
 
     $hash = (Get-FileHash -LiteralPath (Join-Path $stageDir $exeName) -Algorithm SHA256).Hash.ToLowerInvariant()
     $sums = "$hash  $exeName`r`n"
