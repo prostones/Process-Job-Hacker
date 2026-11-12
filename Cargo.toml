@@ -6,7 +6,7 @@ rust-version = "1.95"
 description = "Windows process tree CPU affinity and Job Object memory limiter"
 license = "MIT"
 authors = ["prostones"]
-repository = "https://github.com/prostones/win-job-limiter"
+repository = "https://github.com/prostones/Process-Job-Hacker"
 
 [dependencies]
 anyhow = "1"

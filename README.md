@@ -11,8 +11,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/prostones/win-job-limiter/releases/latest"><img src="https://img.shields.io/badge/Download-Windows%20x64-9CB9FF?style=flat-square" alt="Download"></a>
-  <a href="https://github.com/prostones/win-job-limiter/releases/latest"><img src="https://img.shields.io/github/v/release/prostones/win-job-limiter?style=flat-square&label=Latest&color=98DBB0" alt="Latest release"></a>
+  <a href="https://github.com/prostones/Process-Job-Hacker/releases/latest"><img src="https://img.shields.io/badge/Download-Windows%20x64-9CB9FF?style=flat-square" alt="Download"></a>
+  <a href="https://github.com/prostones/Process-Job-Hacker/releases/latest"><img src="https://img.shields.io/github/v/release/prostones/Process-Job-Hacker?style=flat-square&label=Latest&color=98DBB0" alt="Latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-E5A385?style=flat-square" alt="License"></a>
   <img src="https://img.shields.io/badge/UI-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-B9A8FF?style=flat-square" alt="UI language">
 </p>
@@ -89,7 +89,7 @@
 
 Requires **Windows 10 1809+** (build 17763) or newer, **x64 only**. Administrator rights are required to open other processes for affinity and Job Object APIs.
 
-1. Download from [Releases](https://github.com/prostones/win-job-limiter/releases/latest):
+1. Download from [Releases](https://github.com/prostones/Process-Job-Hacker/releases/latest):
    - Installer: `ProcessJobHacker-<version>-Setup.exe`
    - Portable: `ProcessJobHacker-<version>-win-x64.zip` — extract and run `process-job-hacker.exe`
 2. If SmartScreen warns about an unknown publisher, choose **More info** → **Run anyway** (release builds are unsigned by default).

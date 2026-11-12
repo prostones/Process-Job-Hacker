@@ -11,8 +11,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/prostones/win-job-limiter/releases/latest"><img src="https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-Windows%20x64-9CB9FF?style=flat-square" alt="下载"></a>
-  <a href="https://github.com/prostones/win-job-limiter/releases/latest"><img src="https://img.shields.io/github/v/release/prostones/win-job-limiter?style=flat-square&label=%E6%9C%80%E6%96%B0%E7%89%88%E6%9C%AC&color=98DBB0" alt="最新版本"></a>
+  <a href="https://github.com/prostones/Process-Job-Hacker/releases/latest"><img src="https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-Windows%20x64-9CB9FF?style=flat-square" alt="下载"></a>
+  <a href="https://github.com/prostones/Process-Job-Hacker/releases/latest"><img src="https://img.shields.io/github/v/release/prostones/Process-Job-Hacker?style=flat-square&label=%E6%9C%80%E6%96%B0%E7%89%88%E6%9C%AC&color=98DBB0" alt="最新版本"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/%E8%AE%B8%E5%8F%AF%E8%AF%81-MIT-E5A385?style=flat-square" alt="许可证"></a>
   <img src="https://img.shields.io/badge/%E7%95%8C%E9%9D%A2-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-B9A8FF?style=flat-square" alt="界面语言">
 </p>
@@ -89,7 +89,7 @@
 
 需要 **Windows 10 1809+**（build 17763）或更高版本，**仅 x64**。对其他进程设置亲和性与 Job Object 需要**管理员权限**。
 
-1. 从 [Releases](https://github.com/prostones/win-job-limiter/releases/latest) 下载：
+1. 从 [Releases](https://github.com/prostones/Process-Job-Hacker/releases/latest) 下载：
    - 安装包：`ProcessJobHacker-<version>-Setup.exe`
    - 便携包：`ProcessJobHacker-<version>-win-x64.zip`，解压后运行 `process-job-hacker.exe`
 2. 若 SmartScreen 提示未知发布者，选择 **更多信息** → **仍要运行**（默认发布包未签名）。
