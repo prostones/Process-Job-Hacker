@@ -18,13 +18,14 @@ use crate::model::policy::{
     find_topmost_matches, is_critical_process,
 };
 use crate::model::process::{PidKey, ProcessRecord, ProcessSnapshot};
-use crate::model::tree::ProcessTree;
+use crate::model::tree::{ProcessSort, ProcessTree};
 use crate::monitor::{MonitorEvent, ProcessMonitor};
 use crate::sankey;
 use crate::tray::TrayState;
 use crate::ui;
 use crate::ui::cpu_chart::{draw_cpu_panel, expanded_panel_height};
 use crate::ui::details::draw_details;
+use crate::ui::icon_cache::ProcessIconCache;
 use crate::ui::limit_editor::{
     LimitEditorAction, LimitEditorContext, LimitEditorState, draw_limit_editor,
 };
@@ -93,6 +94,10 @@ pub struct PjhApp {
     monitor: ProcessMonitor,
     snapshot: Arc<ProcessSnapshot>,
     tree: ProcessTree,
+    /// 进程树名称列的图标纹理缓存。
+    icons: ProcessIconCache,
+    /// 进程树当前的排序规格，点击表头时更新并重建进程树。
+    sort: ProcessSort,
     expanded: HashSet<PidKey>,
     selected: Option<PidKey>,
     selected_job_note: Option<String>,
@@ -214,6 +219,8 @@ impl PjhApp {
             monitor,
             snapshot: Arc::new(ProcessSnapshot::default()),
             tree: ProcessTree::default(),
+            icons: ProcessIconCache::new(),
+            sort: ProcessSort::default(),
             expanded: HashSet::new(),
             selected: None,
             selected_job_note: None,
@@ -289,7 +296,7 @@ impl PjhApp {
 
     fn on_snapshot(&mut self, _ctx: &egui::Context, snapshot: Arc<ProcessSnapshot>) {
         self.snapshot = snapshot;
-        self.tree = ProcessTree::build(&self.snapshot);
+        self.tree = ProcessTree::build_with_sort(&self.snapshot, self.sort);
         if self.expanded.is_empty() {
             self.expanded = self.tree.default_expanded();
         }
@@ -2047,8 +2054,10 @@ impl eframe::App for PjhApp {
                 self.selected,
                 &self.search,
                 &rules,
+                self.sort,
                 self.p0_core.as_ref(),
                 self.all_p_core.as_ref(),
+                &mut self.icons,
             ) {
                 match event {
                     TreeEvent::Select(key) => {
@@ -2061,6 +2070,10 @@ impl eframe::App for PjhApp {
                         if !self.expanded.remove(&key) {
                             self.expanded.insert(key);
                         }
+                    }
+                    TreeEvent::Sort(key) => {
+                        self.sort.toggle(key);
+                        self.tree = ProcessTree::build_with_sort(&self.snapshot, self.sort);
                     }
                     TreeEvent::PinToCore { key, label, mask } => {
                         self.selected = Some(key);

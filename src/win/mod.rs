@@ -1,6 +1,7 @@
 pub mod affinity;
 pub mod elevation;
 pub mod error;
+pub mod icon;
 pub mod job;
 pub mod privilege;
 pub mod process;

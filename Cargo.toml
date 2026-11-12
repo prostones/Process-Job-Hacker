@@ -27,6 +27,7 @@ tray-icon = "0.26"
 uuid = { version = "1", features = ["v4", "serde"] }
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
+    "Win32_Graphics_Gdi",
     "Win32_Security",
     "Win32_System_JobObjects",
     "Win32_System_SystemInformation",

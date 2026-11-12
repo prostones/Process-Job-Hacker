@@ -1,19 +1,27 @@
 use std::collections::{HashMap, HashSet};
 
 use eframe::egui::{self, Align, Color32, Layout, RichText, Sense, Vec2};
+use egui_extras::{Column, TableBuilder};
 
 use crate::model::process::{PidKey, ProcessRecord, ProcessSnapshot};
-use crate::model::tree::ProcessTree;
+use crate::model::tree::{ProcessSort, ProcessSortKey, ProcessTree, SortDirection};
 use crate::ui::format::{format_bytes, format_cpu_percent};
+use crate::ui::icon_cache::{ICON_SIZE, ProcessIconCache};
 use crate::win::affinity::{CoreShortcut, format_mask};
 
-const ROW_HEIGHT: f32 = 21.0;
+const HEADER_HEIGHT: f32 = 20.0;
+const ROW_HEIGHT: f32 = 18.0;
+const INDENT_WIDTH: f32 = 12.0;
+const TOGGLE_WIDTH: f32 = 14.0;
 const PID_WIDTH: f32 = 66.0;
 const PPID_WIDTH: f32 = 60.0;
 const CPU_WIDTH: f32 = 62.0;
 const MEM_WIDTH: f32 = 86.0;
 const COMMIT_WIDTH: f32 = 86.0;
 const RULE_WIDTH: f32 = 54.0;
+const NAME_MIN_WIDTH: f32 = 150.0;
+const TABLE_ID_SALT: &str = "process_tree_table";
+const SORT_HOVER_HINT: &str = "点击按该列排序";
 
 /// 已生效规则的展示类型，用于进程树名称与“规则”列着色。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -80,6 +88,8 @@ pub fn record_rule(rules: &mut HashMap<u32, RuleKind>, pid: u32, kind: RuleKind)
 pub enum TreeEvent {
     Select(PidKey),
     Toggle(PidKey),
+    /// 点击表头请求按该列排序，由 `app.rs` 重建进程树。
+    Sort(ProcessSortKey),
     Terminate(PidKey),
     OpenFileLocation(String),
     PinToCore {
@@ -98,38 +108,14 @@ pub fn draw_process_tree(
     selected: Option<PidKey>,
     filter: &str,
     rules: &HashMap<u32, RuleKind>,
+    sort: ProcessSort,
     p0_shortcut: Option<&CoreShortcut>,
     all_p_shortcut: Option<&CoreShortcut>,
+    icons: &mut ProcessIconCache,
 ) -> Option<TreeEvent> {
-    let available = ui.available_width();
-    let name_width = (available
-        - PID_WIDTH
-        - PPID_WIDTH
-        - CPU_WIDTH
-        - MEM_WIDTH
-        - COMMIT_WIDTH
-        - RULE_WIDTH
-        - 32.0)
-        .max(150.0);
-
-    let mut event = None;
-    ui.horizontal(|ui| {
-        ui.allocate_ui_with_layout(
-            Vec2::new(name_width, 20.0),
-            Layout::left_to_right(Align::Center),
-            |ui| {
-                ui.label(RichText::new("名称").strong());
-            },
-        );
-        numeric_header(ui, PID_WIDTH, "PID");
-        numeric_header(ui, PPID_WIDTH, "PPID");
-        numeric_header(ui, CPU_WIDTH, "CPU%");
-        numeric_header(ui, MEM_WIDTH, "工作集");
-        numeric_header(ui, COMMIT_WIDTH, "提交");
-        numeric_header(ui, RULE_WIDTH, "规则");
-    });
-    ui.separator();
-
+    icons.begin_frame();
+    // 表格内不需要选中文本；Label 默认会抢走点击，导致文字/数字上右键失效。
+    ui.style_mut().interaction.selectable_labels = false;
     let rows = tree.flatten(snapshot, expanded, filter, false);
     if rows.is_empty() {
         ui.add_space(24.0);
@@ -137,138 +123,240 @@ pub fn draw_process_tree(
         return None;
     }
 
-    egui::ScrollArea::vertical()
-        .id_salt("process_tree_scroll")
+    let mut sort_clicked = None;
+    let mut event = None;
+
+    TableBuilder::new(ui)
+        .id_salt(TABLE_ID_SALT)
+        .striped(true)
+        .resizable(true)
         .auto_shrink([false, false])
-        .show_rows(ui, ROW_HEIGHT, rows.len(), |ui, range| {
-            for row_index in range {
-                let row = rows[row_index];
-                let node = &tree.nodes[row.node_index];
-                let record = &snapshot.records[node.record_index];
-                let is_selected = selected == Some(node.key);
-                let row_width = ui.available_width();
-                let (rect, row_response) =
-                    ui.allocate_exact_size(Vec2::new(row_width, ROW_HEIGHT), Sense::click());
-                if is_selected {
-                    ui.painter()
-                        .rect_filled(rect, 2.0, Color32::from_rgb(36, 62, 82));
-                } else if row_response.hovered() {
-                    ui.painter()
-                        .rect_filled(rect, 2.0, Color32::from_rgb(28, 36, 46));
+        .cell_layout(Layout::left_to_right(Align::Center))
+        .column(
+            Column::remainder()
+                .at_least(NAME_MIN_WIDTH)
+                .clip(true)
+                .resizable(false),
+        )
+        .column(Column::initial(PID_WIDTH).at_least(50.0).clip(true))
+        .column(Column::initial(PPID_WIDTH).at_least(46.0).clip(true))
+        .column(Column::initial(CPU_WIDTH).at_least(50.0).clip(true))
+        .column(Column::initial(MEM_WIDTH).at_least(70.0).clip(true))
+        .column(Column::initial(COMMIT_WIDTH).at_least(70.0).clip(true))
+        .column(Column::initial(RULE_WIDTH).at_least(46.0).clip(true))
+        .header(HEADER_HEIGHT, |mut header| {
+            header.col(|ui| {
+                if sortable_header(ui, "名称", ProcessSortKey::Name, sort, false).clicked() {
+                    sort_clicked = Some(ProcessSortKey::Name);
                 }
-
-                let mut child_ui = ui.new_child(
-                    egui::UiBuilder::new()
-                        .max_rect(rect.shrink2(Vec2::new(2.0, 1.0)))
-                        .layout(Layout::left_to_right(Align::Center)),
-                );
-                child_ui.spacing_mut().item_spacing.x = 2.0;
-                child_ui.add_space(row.depth as f32 * 12.0);
-                if row.has_children {
-                    let arrow = if row.expanded { "▾" } else { "▸" };
-                    if child_ui
-                        .add(egui::Button::new(arrow).frame(false).small())
-                        .clicked()
-                    {
-                        event = Some(TreeEvent::Toggle(node.key));
-                    }
-                } else {
-                    child_ui.add_space(14.0);
+            });
+            header.col(|ui| {
+                if sortable_header(ui, "PID", ProcessSortKey::Pid, sort, true).clicked() {
+                    sort_clicked = Some(ProcessSortKey::Pid);
                 }
-
-                let name = record.display_name();
-                let name_width_for_row = (name_width - 18.0 - row.depth as f32 * 12.0).max(80.0);
-                let name_response = child_ui
-                    .allocate_ui_with_layout(
-                        Vec2::new(name_width_for_row, ROW_HEIGHT),
-                        Layout::left_to_right(Align::Center),
-                        |ui| {
-                            ui.add(
-                                egui::Label::new(
-                                    RichText::new(name).color(
-                                        rules
-                                            .get(&record.key.pid)
-                                            .map_or(DEFAULT_NAME_COLOR, |kind| kind.color()),
-                                    ),
-                                )
-                                .truncate(),
-                            )
-                        },
-                    )
-                    .inner;
-                if name_response.clicked() {
-                    event = Some(TreeEvent::Select(node.key));
+            });
+            header.col(|ui| {
+                if sortable_header(ui, "PPID", ProcessSortKey::ParentPid, sort, true).clicked() {
+                    sort_clicked = Some(ProcessSortKey::ParentPid);
                 }
-                name_response.context_menu(|ui| {
-                    if let Some(menu_event) =
-                        draw_row_context_menu(ui, node.key, record, p0_shortcut, all_p_shortcut)
-                    {
-                        event = Some(menu_event);
-                    }
+            });
+            header.col(|ui| {
+                if sortable_header(ui, "CPU%", ProcessSortKey::Cpu, sort, true).clicked() {
+                    sort_clicked = Some(ProcessSortKey::Cpu);
+                }
+            });
+            header.col(|ui| {
+                if sortable_header(ui, "工作集", ProcessSortKey::Memory, sort, true).clicked() {
+                    sort_clicked = Some(ProcessSortKey::Memory);
+                }
+            });
+            header.col(|ui| {
+                if sortable_header(ui, "提交", ProcessSortKey::Commit, sort, true).clicked() {
+                    sort_clicked = Some(ProcessSortKey::Commit);
+                }
+            });
+            // 规则列只是状态标识，不支持排序。
+            header.col(|ui| {
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    ui.label(RichText::new("规则").strong());
                 });
+            });
+        })
+        .body(|body| {
+            body.rows(ROW_HEIGHT, rows.len(), |mut row| {
+                let visible = rows[row.index()];
+                let node = &tree.nodes[visible.node_index];
+                let record = &snapshot.records[node.record_index];
+                row.set_selected(selected == Some(node.key));
 
-                numeric_cell(
-                    &mut child_ui,
-                    PID_WIDTH,
-                    record.key.pid.to_string(),
-                    Color32::from_gray(170),
-                );
-                numeric_cell(
-                    &mut child_ui,
-                    PPID_WIDTH,
-                    record.parent_pid.to_string(),
-                    Color32::from_gray(150),
-                );
-                numeric_cell(
-                    &mut child_ui,
-                    CPU_WIDTH,
-                    format_cpu_percent(record.cpu_percent),
-                    if record.cpu_percent > 80.0 {
+                row.col(|ui| {
+                    cell_row_response(
+                        ui,
+                        node.key,
+                        record,
+                        &mut event,
+                        p0_shortcut,
+                        all_p_shortcut,
+                    );
+                    ui.push_id(node.key, |ui| {
+                        ui.horizontal(|ui| {
+                            // 缩进、折叠箭头、名称之间保持紧凑，避免层级深时挤占名称宽度。
+                            ui.spacing_mut().item_spacing.x = 2.0;
+                            ui.add_space(visible.depth as f32 * INDENT_WIDTH);
+                            if visible.has_children {
+                                let arrow = if visible.expanded { "▾" } else { "▸" };
+                                if ui
+                                    .add(egui::Button::new(arrow).frame(false).small())
+                                    .clicked()
+                                {
+                                    event = Some(TreeEvent::Toggle(node.key));
+                                }
+                            } else {
+                                ui.add_space(TOGGLE_WIDTH);
+                            }
+                            if let Some(texture) =
+                                icons.texture_for(ui.ctx(), record.path.as_deref())
+                            {
+                                ui.add(
+                                    egui::Image::new(texture)
+                                        .fit_to_exact_size(Vec2::splat(ICON_SIZE)),
+                                );
+                            } else {
+                                // 无图标时保留占位，保证同层名称左对齐。
+                                ui.add_space(ICON_SIZE);
+                            }
+                            let color = rules
+                                .get(&record.key.pid)
+                                .map_or(DEFAULT_NAME_COLOR, |kind| kind.color());
+                            ui.add(
+                                egui::Label::new(RichText::new(record.display_name()).color(color))
+                                    .truncate()
+                                    .selectable(false),
+                            );
+                        });
+                    });
+                });
+                row.col(|ui| {
+                    cell_row_response(
+                        ui,
+                        node.key,
+                        record,
+                        &mut event,
+                        p0_shortcut,
+                        all_p_shortcut,
+                    );
+                    numeric_cell(ui, record.key.pid.to_string(), Color32::from_gray(170));
+                });
+                row.col(|ui| {
+                    cell_row_response(
+                        ui,
+                        node.key,
+                        record,
+                        &mut event,
+                        p0_shortcut,
+                        all_p_shortcut,
+                    );
+                    numeric_cell(ui, record.parent_pid.to_string(), Color32::from_gray(150));
+                });
+                row.col(|ui| {
+                    cell_row_response(
+                        ui,
+                        node.key,
+                        record,
+                        &mut event,
+                        p0_shortcut,
+                        all_p_shortcut,
+                    );
+                    let color = if record.cpu_percent > 80.0 {
                         Color32::from_rgb(255, 193, 7)
                     } else {
                         Color32::from_gray(200)
-                    },
-                );
-                numeric_cell(
-                    &mut child_ui,
-                    MEM_WIDTH,
-                    format_bytes(record.memory),
-                    Color32::from_gray(190),
-                );
-                numeric_cell(
-                    &mut child_ui,
-                    COMMIT_WIDTH,
-                    format_bytes(record.commit),
-                    Color32::from_gray(170),
-                );
-                let rule_kind = rules.get(&record.key.pid).copied();
-                let rule_text = if rule_kind.is_some() {
-                    "● 生效"
-                } else {
-                    ""
-                };
-                numeric_cell(
-                    &mut child_ui,
-                    RULE_WIDTH,
-                    rule_text.to_owned(),
-                    rule_kind.map_or(Color32::from_gray(170), RuleKind::color),
-                );
-
-                // 右键与左键一样先同步选中态：后续右键菜单里的“一键限制”依赖当前选中行，
-                // 资源管理器也是右键即选中，避免菜单项承担“设为限额目标”这种隐式选中语义。
-                if row_response.clicked() || row_response.secondary_clicked() {
-                    event = Some(TreeEvent::Select(node.key));
-                }
-                row_response.context_menu(|ui| {
-                    if let Some(menu_event) =
-                        draw_row_context_menu(ui, node.key, record, p0_shortcut, all_p_shortcut)
-                    {
-                        event = Some(menu_event);
-                    }
+                    };
+                    numeric_cell(ui, format_cpu_percent(record.cpu_percent), color);
                 });
-            }
+                row.col(|ui| {
+                    cell_row_response(
+                        ui,
+                        node.key,
+                        record,
+                        &mut event,
+                        p0_shortcut,
+                        all_p_shortcut,
+                    );
+                    numeric_cell(ui, format_bytes(record.memory), Color32::from_gray(190));
+                });
+                row.col(|ui| {
+                    cell_row_response(
+                        ui,
+                        node.key,
+                        record,
+                        &mut event,
+                        p0_shortcut,
+                        all_p_shortcut,
+                    );
+                    numeric_cell(ui, format_bytes(record.commit), Color32::from_gray(170));
+                });
+                row.col(|ui| {
+                    cell_row_response(
+                        ui,
+                        node.key,
+                        record,
+                        &mut event,
+                        p0_shortcut,
+                        all_p_shortcut,
+                    );
+                    let rule_kind = rules.get(&record.key.pid).copied();
+                    let rule_text = if rule_kind.is_some() {
+                        "● 生效"
+                    } else {
+                        ""
+                    };
+                    numeric_cell(
+                        ui,
+                        rule_text.to_owned(),
+                        rule_kind.map_or(Color32::from_gray(170), RuleKind::color),
+                    );
+                });
+            });
         });
+
+    if let Some(key) = sort_clicked {
+        return Some(TreeEvent::Sort(key));
+    }
     event
+}
+
+/// 为单元格注册整行点击与右键响应。
+///
+/// 必须在单元格内容之前调用：`ui.interact` 先注册，折叠按钮等内部控件后注册，
+/// egui 的命中测试会优先选中内部控件，避免整行响应吞掉折叠点击。
+fn cell_row_response(
+    ui: &mut egui::Ui,
+    key: PidKey,
+    record: &ProcessRecord,
+    event: &mut Option<TreeEvent>,
+    p0_shortcut: Option<&CoreShortcut>,
+    all_p_shortcut: Option<&CoreShortcut>,
+) -> egui::Response {
+    let response = ui.interact(
+        ui.max_rect(),
+        ui.scope_id().with("row_click"),
+        Sense::click(),
+    );
+    if response.clicked() {
+        *event = Some(TreeEvent::Select(key));
+    }
+    if response.secondary_clicked() {
+        *event = Some(TreeEvent::Select(key));
+    }
+    response.context_menu(|ui| {
+        if let Some(menu_event) =
+            draw_row_context_menu(ui, key, record, p0_shortcut, all_p_shortcut)
+        {
+            *event = Some(menu_event);
+        }
+    });
+    response
 }
 
 fn draw_row_context_menu(
@@ -339,24 +427,40 @@ fn quick_affinity_item(
     None
 }
 
-fn numeric_header(ui: &mut egui::Ui, width: f32, text: &str) {
-    ui.allocate_ui_with_layout(
-        Vec2::new(width, 20.0),
-        Layout::right_to_left(Align::Center),
-        |ui| {
-            ui.label(RichText::new(text).strong());
-        },
-    );
+fn sortable_header(
+    ui: &mut egui::Ui,
+    text: &str,
+    key: ProcessSortKey,
+    sort: ProcessSort,
+    right_aligned: bool,
+) -> egui::Response {
+    let arrow = if sort.key == key {
+        match sort.direction {
+            SortDirection::Ascending => " ▲",
+            SortDirection::Descending => " ▼",
+        }
+    } else {
+        ""
+    };
+    let label = RichText::new(format!("{text}{arrow}")).strong();
+    let button = egui::Button::new(label).frame(false).small();
+    let response = if right_aligned {
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| ui.add(button))
+            .inner
+    } else {
+        ui.add(button)
+    };
+    response.on_hover_text(SORT_HOVER_HINT)
 }
 
-fn numeric_cell(ui: &mut egui::Ui, width: f32, text: String, color: Color32) {
-    ui.allocate_ui_with_layout(
-        Vec2::new(width, ROW_HEIGHT),
-        Layout::right_to_left(Align::Center),
-        |ui| {
-            ui.label(RichText::new(text).monospace().color(color));
-        },
-    );
+fn numeric_cell(ui: &mut egui::Ui, text: String, color: Color32) {
+    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+        ui.add(
+            egui::Label::new(RichText::new(text).monospace().color(color))
+                .truncate()
+                .selectable(false),
+        );
+    });
 }
 
 #[cfg(test)]

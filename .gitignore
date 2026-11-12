@@ -5,3 +5,5 @@ clippy.log
 dist/
 installer/bin/
 installer/obj/
+
+/rust-egui-gpui*/
